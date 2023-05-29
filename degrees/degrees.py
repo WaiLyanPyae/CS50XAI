@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import sys
 
@@ -45,11 +46,9 @@ def load_data(directory):
     with open(f"{directory}/stars.csv", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            try:
+            with contextlib.suppress(KeyError):
                 people[row["person_id"]]["movies"].add(row["movie_id"])
                 movies[row["movie_id"]]["stars"].add(row["person_id"])
-            except KeyError:
-                pass
 
 
 def main():
@@ -83,7 +82,6 @@ def main():
             movie = movies[path[i + 1][0]]["title"]
             print(f"{i + 1}: {person1} and {person2} starred in {movie}")
 
-
 def shortest_path(source, target):
     """
     Returns the shortest list of (movie_id, person_id) pairs
@@ -91,10 +89,39 @@ def shortest_path(source, target):
 
     If no possible path, returns None.
     """
+    
+    # Initialize frontier with the source node
+    start = Node(state=source, parent=None, action=None)
+    frontier = QueueFrontier()
+    frontier.add(start)
 
-    # TODO
-    raise NotImplementedError
+    # Set of explored nodes
+    explored = set()
 
+    while True:
+        if frontier.empty():
+            return None  # No path exists between source and target
+
+        # Choose a node from the frontier
+        node = frontier.remove()
+
+        if node.state == target:
+            # If node is the target, then solution is found
+            path = []
+            while node.parent is not None:
+                path.append((node.action, node.state))
+                node = node.parent
+            path.reverse()
+            return path
+
+        # Mark node as explored
+        explored.add(node.state)
+
+        # Add neighbors to frontier
+        for action, state in neighbors_for_person(node.state):
+            if not frontier.contains_state(state) and state not in explored:
+                child = Node(state=state, parent=node, action=action)
+                frontier.add(child)
 
 def person_id_for_name(name):
     """
@@ -102,7 +129,7 @@ def person_id_for_name(name):
     resolving ambiguities as needed.
     """
     person_ids = list(names.get(name.lower(), set()))
-    if len(person_ids) == 0:
+    if not person_ids:
         return None
     elif len(person_ids) > 1:
         print(f"Which '{name}'?")
@@ -111,12 +138,10 @@ def person_id_for_name(name):
             name = person["name"]
             birth = person["birth"]
             print(f"ID: {person_id}, Name: {name}, Birth: {birth}")
-        try:
+        with contextlib.suppress(ValueError):
             person_id = input("Intended Person ID: ")
             if person_id in person_ids:
                 return person_id
-        except ValueError:
-            pass
         return None
     else:
         return person_ids[0]
